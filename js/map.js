@@ -27,7 +27,24 @@ class MapManager {
             metric: true
         }).addTo(this.map);
 
+        // Add click event to drop pins
+        this.map.on('click', (e) => {
+            this.onMapClick(e);
+        });
+
         console.log('Map initialized');
+    }
+
+    onMapClick(e) {
+        const lat = e.latlng.lat;
+        const lon = e.latlng.lng;
+        
+        console.log('Map clicked at:', lat, lon);
+        
+        // Notify pin manager if available
+        if (window.pinManager) {
+            window.pinManager.createPin(lat, lon);
+        }
     }
 
     updateUserLocation(lat, lon, accuracy) {
@@ -95,6 +112,29 @@ class MapManager {
         }
         
         return marker;
+    }
+
+    addCustomPin(lat, lon) {
+        // Create custom pin icon
+        const pinIcon = L.divIcon({
+            className: 'custom-pin-marker',
+            html: '<div class="custom-pin-marker"></div>',
+            iconSize: [30, 30],
+            iconAnchor: [15, 30]
+        });
+
+        const marker = L.marker([lat, lon], {
+            icon: pinIcon,
+            draggable: false
+        }).addTo(this.map);
+
+        return marker;
+    }
+
+    removeMarker(marker) {
+        if (marker) {
+            this.map.removeLayer(marker);
+        }
     }
 
     getMap() {
