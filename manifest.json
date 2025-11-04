@@ -1,12 +1,16 @@
 {
   "name": "Field Survey Documentation App",
   "short_name": "Field Survey",
-  "description": "Create field survey documentation with GPS mapping",
+  "description": "Create field survey documentation with GPS mapping and photo capture",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2196F3",
   "orientation": "portrait",
+  "permissions": [
+    "geolocation",
+    "camera"
+  ],
   "icons": [
     {
       "src": "icons/icon-72x72.png",
