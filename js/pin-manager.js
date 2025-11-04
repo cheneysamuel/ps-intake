@@ -4,6 +4,17 @@ class PinManager {
         this.currentPin = null;
         this.currentPhoto = null;
         this.savedLocations = [];
+        this.compassData = {
+            azimuth: 0,
+            elevation: 0,
+            distance: 10,
+            locked: false
+        };
+        this.orientationPermission = false;
+        this.canvas = null;
+        this.ctx = null;
+        this.animationFrame = null;
+        this.metadataHandler = new MetadataHandler();
         this.loadSavedLocations();
         this.init();
     }
@@ -11,6 +22,8 @@ class PinManager {
     init() {
         console.log('Pin Manager initialized');
         this.setupEventListeners();
+        this.setupCompassCanvas();
+        this.requestOrientationPermission();
     }
 
     setupEventListeners() {
@@ -52,6 +65,164 @@ class PinManager {
         document.getElementById('saved-locations-dropdown').addEventListener('change', (e) => {
             this.navigateToSavedLocation(e.target.value);
         });
+
+        // Compass controls
+        document.getElementById('distance-slider').addEventListener('input', (e) => {
+            this.updateDistance(e.target.value);
+        });
+
+        document.getElementById('lock-position-btn').addEventListener('click', () => {
+            this.toggleLock();
+        });
+    }
+
+    setupCompassCanvas() {
+        this.canvas = document.getElementById('compass-canvas');
+        if (this.canvas) {
+            this.ctx = this.canvas.getContext('2d');
+        }
+    }
+
+    async requestOrientationPermission() {
+        // iOS 13+ requires permission for DeviceOrientationEvent
+        if (typeof DeviceOrientationEvent !== 'undefined' && 
+            typeof DeviceOrientationEvent.requestPermission === 'function') {
+            try {
+                const permission = await DeviceOrientationEvent.requestPermission();
+                if (permission === 'granted') {
+                    this.startOrientationTracking();
+                    this.orientationPermission = true;
+                }
+            } catch (error) {
+                console.log('Orientation permission:', error);
+            }
+        } else if (window.DeviceOrientationEvent) {
+            // Non-iOS or older iOS
+            this.startOrientationTracking();
+            this.orientationPermission = true;
+        }
+    }
+
+    startOrientationTracking() {
+        window.addEventListener('deviceorientation', (e) => {
+            if (!this.compassData.locked) {
+                // Alpha = compass direction (0-360)
+                this.compassData.azimuth = e.alpha || 0;
+                // Beta = front-to-back tilt (-180 to 180)
+                this.compassData.elevation = e.beta || 0;
+                // Gamma = left-to-right tilt (-90 to 90)
+                
+                this.updateCompassDisplay();
+            }
+        }, true);
+    }
+
+    updateCompassDisplay() {
+        if (!this.canvas || !this.ctx || !this.currentPin) return;
+
+        const canvas = this.canvas;
+        const ctx = this.ctx;
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = 100;
+
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw compass background
+        ctx.fillStyle = '#f0f0f0';
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // Draw compass circle
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.stroke();
+
+        // Draw cardinal directions
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        ctx.fillText('N', centerX, centerY - radius + 20);
+        ctx.fillText('S', centerX, centerY + radius - 20);
+        ctx.fillText('E', centerX + radius - 20, centerY);
+        ctx.fillText('W', centerX - radius + 20, centerY);
+
+        // Draw subject (pin location) - always at center
+        ctx.fillStyle = '#e91e63';
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 8, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Draw user position based on azimuth and distance
+        const azimuthRad = (this.compassData.azimuth * Math.PI) / 180;
+        const distanceScale = (this.compassData.distance / 100) * radius * 0.8;
+        
+        const userX = centerX + Math.sin(azimuthRad) * distanceScale;
+        const userY = centerY - Math.cos(azimuthRad) * distanceScale;
+
+        // Draw line from subject to user
+        ctx.strokeStyle = '#2196F3';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(userX, userY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Draw user marker (camera)
+        ctx.fillStyle = '#2196F3';
+        ctx.beginPath();
+        ctx.arc(userX, userY, 10, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Draw direction arrow on user marker
+        ctx.save();
+        ctx.translate(userX, userY);
+        ctx.rotate(azimuthRad);
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.moveTo(0, -6);
+        ctx.lineTo(-4, 4);
+        ctx.lineTo(4, 4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        // Update text displays
+        document.getElementById('azimuth-value').textContent = Math.round(this.compassData.azimuth) + '°';
+        document.getElementById('distance-value').textContent = this.compassData.distance.toFixed(1) + ' m';
+    }
+
+    updateDistance(value) {
+        this.compassData.distance = parseFloat(value);
+        document.getElementById('distance-display').textContent = this.compassData.distance.toFixed(1) + ' m';
+        this.updateCompassDisplay();
+    }
+
+    toggleLock() {
+        this.compassData.locked = !this.compassData.locked;
+        const btn = document.getElementById('lock-position-btn');
+        
+        if (this.compassData.locked) {
+            btn.classList.add('locked');
+            btn.textContent = '🔒 Locked';
+        } else {
+            btn.classList.remove('locked');
+            btn.textContent = '🔓 Lock Position';
+        }
     }
 
     createPin(lat, lon) {
@@ -81,7 +252,7 @@ class PinManager {
         this.openModal(lat, lon);
     }
 
-    openModal(lat, lon) {
+    openModal(lat, lon, isEdit = false) {
         const modal = document.getElementById('pin-modal');
         modal.classList.add('active');
 
@@ -89,12 +260,55 @@ class PinManager {
         document.getElementById('pin-coordinates').textContent = 
             `Lat: ${lat.toFixed(6)}, Lon: ${lon.toFixed(6)}`;
 
-        // Reset form
-        document.getElementById('pin-name').value = '';
-        this.clearPhotoPreview();
+        if (!isEdit) {
+            // Reset form for new pin
+            document.getElementById('pin-name').value = '';
+            this.clearPhotoPreview();
+            this.compassData.locked = false;
+            document.getElementById('lock-position-btn').classList.remove('locked');
+            document.getElementById('lock-position-btn').textContent = '🔓 Lock Position';
+        }
         
         // Hide download button initially
         document.getElementById('download-photo-btn').style.display = 'none';
+
+        // Start compass updates if not already running
+        if (!this.animationFrame) {
+            this.startCompassAnimation();
+        }
+    }
+
+    startCompassAnimation() {
+        const animate = () => {
+            if (document.getElementById('pin-modal').classList.contains('active')) {
+                this.updateCompassDisplay();
+                this.animationFrame = requestAnimationFrame(animate);
+            } else {
+                this.animationFrame = null;
+            }
+        };
+        animate();
+    }
+
+    editPin(pinData) {
+        console.log('Editing pin:', pinData);
+        
+        this.currentPin = pinData;
+        this.openModal(pinData.lat, pinData.lon, true);
+        
+        // Restore pin data
+        if (pinData.name) {
+            document.getElementById('pin-name').value = pinData.name;
+        }
+        if (pinData.photo) {
+            this.currentPhoto = pinData.photo;
+            this.displayPhoto(pinData.photo.data);
+        }
+        if (pinData.compassData) {
+            this.compassData = { ...pinData.compassData };
+            document.getElementById('distance-slider').value = this.compassData.distance;
+            document.getElementById('distance-display').textContent = this.compassData.distance.toFixed(1) + ' m';
+        }
     }
 
     closeModal() {
@@ -117,20 +331,39 @@ class PinManager {
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
+            // Get user location
+            const userLocation = window.app ? window.app.currentPosition : null;
+
+            // Prepare metadata
+            const metadata = this.metadataHandler.prepareMetadata(
+                this.currentPin,
+                this.compassData,
+                userLocation
+            );
+
+            // Add metadata overlay to image
+            const imageWithMetadata = await this.metadataHandler.addMetadataToImage(
+                e.target.result,
+                metadata
+            );
+
             this.currentPhoto = {
-                data: e.target.result,
+                data: imageWithMetadata,
+                originalData: e.target.result,
                 name: file.name,
-                timestamp: new Date().toISOString()
+                timestamp: metadata.datetime,
+                metadata: metadata
             };
 
             // Update pin with photo
             if (this.currentPin) {
                 this.currentPin.photo = this.currentPhoto;
+                this.currentPin.compassData = { ...this.compassData };
             }
 
             // Display photo
-            this.displayPhoto(e.target.result);
+            this.displayPhoto(imageWithMetadata);
         };
 
         reader.readAsDataURL(file);
@@ -156,22 +389,29 @@ class PinManager {
             return;
         }
 
+        // Create filename with metadata
+        const filename = this.metadataHandler.createMetadataFilename(
+            this.currentPhoto.metadata
+        );
+
+        // Download image with metadata overlay
         const link = document.createElement('a');
         link.href = this.currentPhoto.data;
-        
-        // Create filename with coordinates and timestamp
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const lat = this.currentPin.lat.toFixed(6);
-        const lon = this.currentPin.lon.toFixed(6);
-        link.download = `survey_${lat}_${lon}_${timestamp}.jpg`;
+        link.download = filename;
         
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
 
+        // Also download separate metadata text file
+        this.metadataHandler.downloadMetadataFile(
+            this.currentPhoto.metadata,
+            filename
+        );
+
         // Show success message
         if (window.app) {
-            window.app.showStatus('Photo downloaded successfully', 'success');
+            window.app.showStatus('Photo and metadata downloaded', 'success');
             setTimeout(() => window.app.clearStatus(), 2000);
         }
     }
@@ -188,13 +428,25 @@ class PinManager {
             lat: this.currentPin.lat,
             lon: this.currentPin.lon,
             photo: this.currentPhoto,
-            timestamp: new Date().toISOString()
+            compassData: { ...this.compassData },
+            timestamp: new Date().toISOString(),
+            marker: this.currentPin.marker
         };
 
         this.savedLocations.push(savedLocation);
         this.currentPin.saved = true;
+        this.currentPin.id = savedLocation.id;
         this.saveSavedLocations();
         this.updateSavedLocationsDropdown();
+
+        // Update marker to be clickable
+        if (this.currentPin.marker) {
+            this.currentPin.marker.off('click');
+            this.currentPin.marker.on('click', (e) => {
+                L.DomEvent.stopPropagation(e);
+                this.editPin(savedLocation);
+            });
+        }
 
         // Show success message
         if (window.app) {
@@ -247,13 +499,24 @@ class PinManager {
         if (!window.mapManager) return;
 
         this.savedLocations.forEach(location => {
-            const marker = window.mapManager.addCustomPin(location.lat, location.lon);
+            const marker = window.mapManager.addCustomPin(location.lat, location.lon, location);
+            
+            location.marker = marker; // Store reference
             
             let popupContent = `<strong>${location.name}</strong><br>`;
             popupContent += `Lat: ${location.lat.toFixed(6)}<br>`;
             popupContent += `Lon: ${location.lon.toFixed(6)}`;
+            if (location.compassData) {
+                popupContent += `<br>Azimuth: ${Math.round(location.compassData.azimuth)}°`;
+            }
             
             marker.bindPopup(popupContent);
+            
+            // Add click handler to edit
+            marker.on('click', (e) => {
+                L.DomEvent.stopPropagation(e);
+                this.editPin(location);
+            });
         });
     }
 
