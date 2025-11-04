@@ -115,6 +115,36 @@
     <script src="js/map.js"></script>
     <script src="js/pin-manager.js"></script>
     
+    <!-- Debug script -->
+    <script>
+        console.log('=== INLINE SCRIPT RUNNING ===');
+        console.log('Scripts loaded check:');
+        console.log('- Leaflet (L):', typeof L !== 'undefined' ? 'LOADED' : 'NOT LOADED');
+        console.log('- MapManager class:', typeof MapManager !== 'undefined' ? 'LOADED' : 'NOT LOADED');
+        console.log('- PinManager class:', typeof PinManager !== 'undefined' ? 'LOADED' : 'NOT LOADED');
+        
+        // Wait and check instances
+        setTimeout(() => {
+            console.log('After 1 second:');
+            console.log('- window.mapManager:', window.mapManager ? 'EXISTS' : 'NOT FOUND');
+            console.log('- window.pinManager:', window.pinManager ? 'EXISTS' : 'NOT FOUND');
+            
+            if (window.mapManager && window.mapManager.map) {
+                console.log('- Map object exists:', !!window.mapManager.map);
+                
+                // Add a backup click listener
+                window.mapManager.map.on('click', (e) => {
+                    console.log('>>> BACKUP CLICK HANDLER <<<');
+                    console.log('Clicked at:', e.latlng);
+                    alert('Map clicked! Lat: ' + e.latlng.lat.toFixed(4) + ', Lon: ' + e.latlng.lng.toFixed(4));
+                });
+                console.log('Backup click handler added');
+            } else {
+                console.error('Map manager or map not found!');
+            }
+        }, 1000);
+    </script>
+    
     <!-- Service Worker registration -->
     <script>
         if ('serviceWorker' in navigator) {
