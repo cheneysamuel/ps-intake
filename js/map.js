@@ -146,7 +146,7 @@ class MapManager {
         return marker;
     }
 
-    addCustomPin(lat, lon) {
+    addCustomPin(lat, lon, pinData = null) {
         // Create custom pin icon
         const pinIcon = L.divIcon({
             className: 'custom-pin-marker',
@@ -159,6 +159,16 @@ class MapManager {
             icon: pinIcon,
             draggable: false
         }).addTo(this.map);
+
+        // Add click event to open modal for editing
+        marker.on('click', (e) => {
+            console.log('Pin clicked at:', lat, lon);
+            L.DomEvent.stopPropagation(e); // Prevent map click event
+            
+            if (window.pinManager && pinData) {
+                window.pinManager.editPin(pinData);
+            }
+        });
 
         return marker;
     }
