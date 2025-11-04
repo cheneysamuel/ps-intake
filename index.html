@@ -65,34 +65,9 @@
                 </div>
                 
                 <div class="modal-body">
-                    <!-- Compass Direction Section -->
-                    <div class="compass-section">
-                        <h3>🧭 Your Position & Direction</h3>
-                        <div class="compass-container">
-                            <canvas id="compass-canvas" width="250" height="250"></canvas>
-                            <div class="compass-info">
-                                <div class="compass-data">
-                                    <span><strong>Azimuth:</strong> <span id="azimuth-value">--°</span></span>
-                                    <span><strong>Distance:</strong> <span id="distance-value">-- m</span></span>
-                                </div>
-                                <button id="lock-position-btn" class="btn btn-secondary">
-                                    🔓 Lock Position
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- Distance Adjustment Slider -->
-                        <div class="distance-control">
-                            <label for="distance-slider">Adjust Distance from Subject:</label>
-                            <div class="slider-container">
-                                <input type="range" id="distance-slider" min="1" max="100" value="10" step="0.5">
-                                <span id="distance-display">10 m</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="pin-info-compact">
-                        <p><strong>Pin Location:</strong> <span id="pin-coordinates">Lat: --, Lon: --</span></p>
+                    <div class="pin-info">
+                        <p><strong>Location:</strong></p>
+                        <p id="pin-coordinates">Lat: --, Lon: --</p>
                     </div>
 
                     <div class="photo-section">
