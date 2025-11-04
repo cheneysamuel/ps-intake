@@ -9,30 +9,57 @@ class MapManager {
     }
 
     init() {
-        // Initialize map
-        this.map = L.map('map', {
-            zoomControl: true,
-            attributionControl: true
-        }).setView([0, 0], 2); // Default view, will update with GPS
+        console.log('Initializing map...');
+        
+        // Check if Leaflet is loaded
+        if (typeof L === 'undefined') {
+            console.error('Leaflet library not loaded!');
+            return;
+        }
+        
+        try {
+            // Initialize map
+            this.map = L.map('map', {
+                zoomControl: true,
+                attributionControl: true,
+                preferCanvas: false
+            }).setView([0, 0], 2); // Default view, will update with GPS
 
-        // Add OpenStreetMap tiles
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            maxZoom: 19
-        }).addTo(this.map);
+            console.log('Map object created');
 
-        // Add scale control
-        L.control.scale({
-            imperial: true,
-            metric: true
-        }).addTo(this.map);
+            // Add OpenStreetMap tiles
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 19,
+                minZoom: 1
+            }).addTo(this.map);
 
-        // Add click event to drop pins
-        this.map.on('click', (e) => {
-            this.onMapClick(e);
-        });
+            console.log('Map tiles added');
 
-        console.log('Map initialized');
+            // Add scale control
+            L.control.scale({
+                imperial: true,
+                metric: true
+            }).addTo(this.map);
+
+            // Add click event to drop pins
+            this.map.on('click', (e) => {
+                console.log('Map click event fired!');
+                this.onMapClick(e);
+            });
+
+            console.log('Map click listener added');
+
+            // Force map to recalculate size after a short delay
+            setTimeout(() => {
+                this.map.invalidateSize();
+                console.log('Map size invalidated');
+            }, 250);
+
+            console.log('Map initialized successfully');
+        } catch (error) {
+            console.error('Error initializing map:', error);
+        }
     }
 
     onMapClick(e) {
@@ -40,10 +67,15 @@ class MapManager {
         const lon = e.latlng.lng;
         
         console.log('Map clicked at:', lat, lon);
+        console.log('Pin manager available?', !!window.pinManager);
         
         // Notify pin manager if available
         if (window.pinManager) {
+            console.log('Calling pinManager.createPin()');
             window.pinManager.createPin(lat, lon);
+        } else {
+            console.error('Pin manager not initialized yet!');
+            alert('Pin manager not ready. Please refresh the page.');
         }
     }
 
