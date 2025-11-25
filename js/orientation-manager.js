@@ -5,6 +5,12 @@ class OrientationManager {
         this.pitch = null;
         this.isTracking = false;
         this.hasReceivedData = false;
+        
+        // Smoothing for azimuth to reduce jitter
+        this.azimuthBuffer = [];
+        this.bufferSize = 5; // Average over last 5 readings
+        this.smoothedAzimuth = null;
+        
         this.init();
     }
 
@@ -185,6 +191,7 @@ class OrientationManager {
         if (event.alpha !== null) {
             // Convert alpha to azimuth (0 = North)
             this.azimuth = Math.round(event.alpha);
+            this.smoothedAzimuth = this.smoothAzimuth(this.azimuth);
         }
 
         if (event.beta !== null) {
@@ -222,9 +229,11 @@ class OrientationManager {
         
         if (event.webkitCompassHeading !== undefined) {
             this.azimuth = Math.round(event.webkitCompassHeading);
+            this.smoothedAzimuth = this.smoothAzimuth(this.azimuth);
         } else if (event.alpha !== null) {
             // Approximate heading from alpha (may not be accurate without magnetometer)
             this.azimuth = Math.round(360 - event.alpha);
+            this.smoothedAzimuth = this.smoothAzimuth(this.azimuth);
         }
 
         if (event.beta !== null) {
@@ -259,10 +268,39 @@ class OrientationManager {
         return directions[index];
     }
 
+    smoothAzimuth(newAzimuth) {
+        // Add new reading to buffer
+        this.azimuthBuffer.push(newAzimuth);
+        
+        // Keep buffer at specified size
+        if (this.azimuthBuffer.length > this.bufferSize) {
+            this.azimuthBuffer.shift();
+        }
+        
+        // Handle wraparound at 0/360 degrees
+        // Check if readings span across the 0/360 boundary
+        const hasWraparound = this.azimuthBuffer.some(v => v < 90) && 
+                              this.azimuthBuffer.some(v => v > 270);
+        
+        let average;
+        if (hasWraparound) {
+            // Normalize values for averaging across 0/360 boundary
+            const normalized = this.azimuthBuffer.map(v => v < 180 ? v + 360 : v);
+            average = normalized.reduce((a, b) => a + b, 0) / normalized.length;
+            average = average % 360;
+        } else {
+            // Simple average
+            average = this.azimuthBuffer.reduce((a, b) => a + b, 0) / this.azimuthBuffer.length;
+        }
+        
+        return Math.round(average);
+    }
+
     updateMapMarker() {
         // Update the map marker rotation if map manager is available
-        if (window.mapManager && this.azimuth !== null) {
-            window.mapManager.updateUserLocationRotation(this.azimuth);
+        // Use smoothed azimuth to reduce jitter
+        if (window.mapManager && this.smoothedAzimuth !== null) {
+            window.mapManager.updateUserLocationRotation(this.smoothedAzimuth);
         }
     }
 
