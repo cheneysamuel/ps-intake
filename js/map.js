@@ -88,18 +88,19 @@ class MapManager {
             this.map.removeLayer(this.accuracyCircle);
         }
 
-        // Create custom icon for user location
+        // Create custom arrow icon for user location with rotation
         const userIcon = L.divIcon({
-            className: 'user-location-marker',
-            html: '<div style="background-color: #2196F3; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>',
-            iconSize: [16, 16],
-            iconAnchor: [8, 8]
+            className: 'user-location-arrow',
+            html: '<div class="arrow-marker"></div>',
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
         });
 
         // Add marker at current position
         this.userMarker = L.marker([lat, lon], {
             icon: userIcon,
-            title: 'Your Location'
+            title: 'Your Location',
+            rotationAngle: 0  // Will be updated by orientation
         }).addTo(this.map);
 
         // Add popup to marker
@@ -123,6 +124,19 @@ class MapManager {
         if (!this.hasBeenCentered) {
             this.centerMap(lat, lon);
             this.hasBeenCentered = true;
+        }
+    }
+
+    updateUserLocationRotation(azimuth) {
+        // Update the rotation of the user location marker based on azimuth
+        if (this.userMarker) {
+            const icon = this.userMarker.getElement();
+            if (icon) {
+                const arrowElement = icon.querySelector('.arrow-marker');
+                if (arrowElement) {
+                    arrowElement.style.transform = `rotate(${azimuth}deg)`;
+                }
+            }
         }
     }
 
