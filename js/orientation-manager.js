@@ -188,21 +188,12 @@ class OrientationManager {
             this.hasReceivedData = true;
         }
 
-        if (event.alpha !== null) {
-            // Convert alpha to azimuth (0 = North)
-            this.azimuth = Math.round(event.alpha);
-            this.smoothedAzimuth = this.smoothAzimuth(this.azimuth);
-        }
+        let rawAlpha = event.alpha;
+        let rawBeta = event.beta;
+        let rawGamma = event.gamma;
 
-        if (event.beta !== null) {
-            // Convert beta to pitch (0 = horizon, 90 = straight up, -90 = straight down)
-            // When phone is held vertically (camera facing forward):
-            // beta = 0 means phone is lying flat
-            // beta = 90 means phone is vertical (camera at horizon)
-            // We need to adjust so that horizon = 0 and straight up = 90
-            
-            let rawBeta = event.beta;
-            
+        // Calculate pitch first (we need it for azimuth correction)
+        if (rawBeta !== null) {
             // Normalize to -90 to 90 range where:
             // 0 = horizon (phone vertical, camera forward)
             // 90 = straight up (phone tilted back)
@@ -212,6 +203,30 @@ class OrientationManager {
             // Clamp to -90 to 90 range
             if (this.pitch > 90) this.pitch = 90;
             if (this.pitch < -90) this.pitch = -90;
+        }
+
+        if (rawAlpha !== null && rawBeta !== null) {
+            // Convert alpha to azimuth (0 = North)
+            let azimuth = rawAlpha;
+            
+            // IMPORTANT: Compensate for magnetometer reversal at high pitch angles
+            // When the phone is tilted past ~45 degrees (pitch > -45), the magnetometer
+            // reading flips by 180 degrees. We need to correct this.
+            // The camera's forward direction should always represent the azimuth.
+            
+            // When pitch is high (phone tilted back, camera pointing up):
+            // rawBeta ranges from ~90 to 180 (or -90 to -180 depending on device)
+            // pitch ranges from 0 to 90 degrees
+            
+            if (this.pitch > 45) {
+                // Phone is tilted significantly back (camera pointing upward)
+                // Magnetometer reading is reversed, so flip it by 180 degrees
+                azimuth = (rawAlpha + 180) % 360;
+                console.log(`Pitch compensation applied: pitch=${this.pitch}°, raw alpha=${rawAlpha}°, corrected=${azimuth}°`);
+            }
+            
+            this.azimuth = Math.round(azimuth);
+            this.smoothedAzimuth = this.smoothAzimuth(this.azimuth);
         }
 
         this.updateDisplay();
@@ -227,20 +242,38 @@ class OrientationManager {
             this.hasReceivedData = true;
         }
         
-        if (event.webkitCompassHeading !== undefined) {
-            this.azimuth = Math.round(event.webkitCompassHeading);
-            this.smoothedAzimuth = this.smoothAzimuth(this.azimuth);
-        } else if (event.alpha !== null) {
-            // Approximate heading from alpha (may not be accurate without magnetometer)
-            this.azimuth = Math.round(360 - event.alpha);
-            this.smoothedAzimuth = this.smoothAzimuth(this.azimuth);
-        }
-
-        if (event.beta !== null) {
-            let rawBeta = event.beta;
+        let rawBeta = event.beta;
+        
+        // Calculate pitch first
+        if (rawBeta !== null) {
             this.pitch = Math.round(rawBeta - 90);
             if (this.pitch > 90) this.pitch = 90;
             if (this.pitch < -90) this.pitch = -90;
+        }
+        
+        // Handle azimuth with pitch compensation
+        if (event.webkitCompassHeading !== undefined) {
+            let azimuth = event.webkitCompassHeading;
+            
+            // Apply pitch compensation for iOS devices too
+            if (this.pitch > 45) {
+                azimuth = (azimuth + 180) % 360;
+                console.log(`iOS Pitch compensation: pitch=${this.pitch}°, raw=${event.webkitCompassHeading}°, corrected=${azimuth}°`);
+            }
+            
+            this.azimuth = Math.round(azimuth);
+            this.smoothedAzimuth = this.smoothAzimuth(this.azimuth);
+        } else if (event.alpha !== null) {
+            // Approximate heading from alpha (may not be accurate without magnetometer)
+            let azimuth = 360 - event.alpha;
+            
+            // Apply pitch compensation
+            if (this.pitch > 45) {
+                azimuth = (azimuth + 180) % 360;
+            }
+            
+            this.azimuth = Math.round(azimuth);
+            this.smoothedAzimuth = this.smoothAzimuth(this.azimuth);
         }
 
         this.updateDisplay();
