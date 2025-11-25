@@ -4,13 +4,36 @@ class OrientationManager {
         this.azimuth = null;
         this.pitch = null;
         this.isTracking = false;
+        this.hasReceivedData = false;
         this.init();
     }
 
     init() {
         console.log('Initializing Orientation Manager...');
+        console.log('User Agent:', navigator.userAgent);
+        console.log('Secure Context (HTTPS):', window.isSecureContext);
+        this.addPermissionButton();
         this.checkSensorSupport();
         this.startTracking();
+    }
+
+    addPermissionButton() {
+        // Add a button to request permissions for Chrome/Brave/iOS
+        const controls = document.getElementById('controls');
+        if (controls) {
+            const button = document.createElement('button');
+            button.id = 'enable-orientation-btn';
+            button.className = 'btn btn-primary';
+            button.textContent = '🧭 Enable Compass & Orientation';
+            button.style.marginTop = '0.5rem';
+            button.style.fontSize = '1.1rem';
+            button.style.padding = '1rem';
+            button.addEventListener('click', () => this.requestPermission());
+            controls.insertBefore(button, controls.firstChild);
+            console.log('Permission button added to UI');
+        } else {
+            console.error('Controls element not found!');
+        }
     }
 
     checkSensorSupport() {
@@ -21,10 +44,13 @@ class OrientationManager {
             return false;
         }
 
+        console.log('DeviceOrientationEvent supported');
+        console.log('requestPermission function exists:', typeof DeviceOrientationEvent.requestPermission === 'function');
+
         // Check if permission is needed (iOS 13+)
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            console.log('Permission required for device orientation');
-            this.requestPermission();
+            console.log('Permission required for device orientation (iOS 13+)');
+            this.showStatus('Tap "Enable Compass" to activate orientation sensors', 'info');
             return false;
         }
 
@@ -32,38 +58,117 @@ class OrientationManager {
     }
 
     async requestPermission() {
-        try {
-            const permission = await DeviceOrientationEvent.requestPermission();
-            if (permission === 'granted') {
-                console.log('Device orientation permission granted');
-                this.startTracking();
-            } else {
-                console.warn('Device orientation permission denied');
-                this.showStatus('Permission denied for orientation sensors', 'error');
+        console.log('=== requestPermission called ===');
+        console.log('iOS requestPermission available:', typeof DeviceOrientationEvent.requestPermission === 'function');
+        
+        const button = document.getElementById('enable-orientation-btn');
+        if (button) {
+            button.disabled = true;
+            button.textContent = '⏳ Requesting permission...';
+        }
+        
+        // For iOS 13+ which requires explicit permission
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            try {
+                console.log('Calling DeviceOrientationEvent.requestPermission()...');
+                const permission = await DeviceOrientationEvent.requestPermission();
+                console.log('Permission result:', permission);
+                
+                if (permission === 'granted') {
+                    console.log('✓ Device orientation permission GRANTED');
+                    this.showStatus('✓ Orientation sensors enabled!', 'success');
+                    this.isTracking = false; // Reset to allow startTracking to run
+                    this.startTracking();
+                    
+                    // Wait a bit to confirm data is flowing
+                    setTimeout(() => {
+                        if (this.hasReceivedData) {
+                            button?.remove();
+                        } else {
+                            console.warn('Permission granted but no data received');
+                            if (button) button.textContent = '🔄 Retry Enable Compass';
+                        }
+                    }, 2000);
+                } else {
+                    console.warn('✗ Device orientation permission DENIED');
+                    this.showStatus('Permission denied. Tap the button again to retry.', 'error');
+                    if (button) {
+                        button.disabled = false;
+                        button.textContent = '🧭 Enable Compass & Orientation';
+                    }
+                }
+            } catch (error) {
+                console.error('Error requesting device orientation permission:', error);
+                console.error('Error details:', error.name, error.message);
+                this.showStatus('Error: ' + error.message, 'error');
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = '🔄 Retry Enable Compass';
+                }
             }
-        } catch (error) {
-            console.error('Error requesting device orientation permission:', error);
-            this.showStatus('Could not request sensor permissions', 'error');
+        } else {
+            // For Chrome/Brave Android - just notify that sensors should be working
+            console.log('No iOS permission API - starting tracking directly');
+            this.showStatus('Starting orientation sensors...', 'info');
+            this.isTracking = false; // Reset to allow startTracking to run
+            this.startTracking();
+            
+            // Check after 2 seconds if we're receiving data
+            setTimeout(() => {
+                if (!this.hasReceivedData) {
+                    console.warn('No orientation data received after 2 seconds');
+                    console.log('Possible causes:');
+                    console.log('- Not using HTTPS');
+                    console.log('- Motion sensors blocked in browser settings');
+                    console.log('- Device lacks required sensors');
+                    this.showStatus('No sensor data detected. Try using HTTPS.', 'warning');
+                    if (button) {
+                        button.disabled = false;
+                        button.textContent = '🔄 Retry Enable Compass';
+                    }
+                } else {
+                    button?.remove();
+                    this.showStatus('✓ Sensors working!', 'success');
+                }
+            }, 2000);
         }
     }
 
     startTracking() {
-        if (this.isTracking) return;
+        if (this.isTracking) {
+            console.log('Already tracking orientation');
+            return;
+        }
 
-        // Listen for device orientation changes
+        console.log('Starting orientation tracking...');
+
+        // Listen for device orientation changes (absolute = compass)
         window.addEventListener('deviceorientationabsolute', (event) => {
+            console.log('deviceorientationabsolute event:', event.alpha, event.beta, event.gamma, event.absolute);
+            this.hasReceivedData = true;
             this.handleOrientationAbsolute(event);
         }, true);
 
-        // Fallback to regular device orientation if absolute is not available
+        // Fallback to regular device orientation
         window.addEventListener('deviceorientation', (event) => {
-            if (!event.absolute) {
-                this.handleOrientation(event);
-            }
+            console.log('deviceorientation event:', event.alpha, event.beta, event.gamma, event.absolute);
+            this.hasReceivedData = true;
+            this.handleOrientation(event);
         }, true);
 
         this.isTracking = true;
-        console.log('Orientation tracking started');
+        console.log('Orientation event listeners added');
+        
+        // Test if events are firing
+        setTimeout(() => {
+            if (!this.hasReceivedData) {
+                console.error('No orientation events received after 3 seconds!');
+                console.log('This may indicate:');
+                console.log('1. Not using HTTPS (required for motion sensors)');
+                console.log('2. Motion sensors are disabled in browser settings');
+                console.log('3. Device does not have required sensors');
+            }
+        }, 3000);
     }
 
     handleOrientationAbsolute(event) {
@@ -71,6 +176,11 @@ class OrientationManager {
         // alpha: 0-360 degrees (0 = North, 90 = East, 180 = South, 270 = West)
         // beta: -180 to 180 degrees (pitch - forward/backward tilt)
         // gamma: -90 to 90 degrees (roll - left/right tilt)
+
+        if (!this.hasReceivedData) {
+            console.log('First orientation data received!');
+            this.hasReceivedData = true;
+        }
 
         if (event.alpha !== null) {
             // Convert alpha to azimuth (0 = North)
@@ -104,6 +214,12 @@ class OrientationManager {
     handleOrientation(event) {
         // Fallback for devices without absolute orientation
         // Use webkitCompassHeading if available (iOS)
+        
+        if (!this.hasReceivedData) {
+            console.log('First orientation data received (non-absolute)!');
+            this.hasReceivedData = true;
+        }
+        
         if (event.webkitCompassHeading !== undefined) {
             this.azimuth = Math.round(event.webkitCompassHeading);
         } else if (event.alpha !== null) {
