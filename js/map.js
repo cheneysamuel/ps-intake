@@ -5,6 +5,7 @@ class MapManager {
         this.userMarker = null;
         this.accuracyCircle = null;
         this.defaultZoom = 16;
+        this.lastRotation = 0;
         this.init();
     }
 
@@ -80,45 +81,55 @@ class MapManager {
     }
 
     updateUserLocation(lat, lon, accuracy) {
-        // Remove existing marker and circle if they exist
+        // Update or create marker
         if (this.userMarker) {
-            this.map.removeLayer(this.userMarker);
+            // Update existing marker position
+            this.userMarker.setLatLng([lat, lon]);
+            
+            // Update popup content
+            this.userMarker.getPopup().setContent(`
+                <strong>Your Location</strong><br>
+                Latitude: ${lat.toFixed(6)}<br>
+                Longitude: ${lon.toFixed(6)}<br>
+                Accuracy: ±${accuracy.toFixed(0)}m
+            `);
+        } else {
+            // Create custom arrow icon for user location with rotation
+            const userIcon = L.divIcon({
+                className: 'user-location-arrow',
+                html: '<div class="arrow-marker"></div>',
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            });
+
+            // Add marker at current position
+            this.userMarker = L.marker([lat, lon], {
+                icon: userIcon,
+                title: 'Your Location'
+            }).addTo(this.map);
+
+            // Add popup to marker
+            this.userMarker.bindPopup(`
+                <strong>Your Location</strong><br>
+                Latitude: ${lat.toFixed(6)}<br>
+                Longitude: ${lon.toFixed(6)}<br>
+                Accuracy: ±${accuracy.toFixed(0)}m
+            `);
         }
+
+        // Update or create accuracy circle
         if (this.accuracyCircle) {
-            this.map.removeLayer(this.accuracyCircle);
+            this.accuracyCircle.setLatLng([lat, lon]);
+            this.accuracyCircle.setRadius(accuracy);
+        } else {
+            this.accuracyCircle = L.circle([lat, lon], {
+                radius: accuracy,
+                color: '#2196F3',
+                fillColor: '#2196F3',
+                fillOpacity: 0.1,
+                weight: 1
+            }).addTo(this.map);
         }
-
-        // Create custom arrow icon for user location with rotation
-        const userIcon = L.divIcon({
-            className: 'user-location-arrow',
-            html: '<div class="arrow-marker"></div>',
-            iconSize: [40, 40],
-            iconAnchor: [20, 20]
-        });
-
-        // Add marker at current position
-        this.userMarker = L.marker([lat, lon], {
-            icon: userIcon,
-            title: 'Your Location',
-            rotationAngle: 0  // Will be updated by orientation
-        }).addTo(this.map);
-
-        // Add popup to marker
-        this.userMarker.bindPopup(`
-            <strong>Your Location</strong><br>
-            Latitude: ${lat.toFixed(6)}<br>
-            Longitude: ${lon.toFixed(6)}<br>
-            Accuracy: ±${accuracy.toFixed(0)}m
-        `);
-
-        // Add accuracy circle
-        this.accuracyCircle = L.circle([lat, lon], {
-            radius: accuracy,
-            color: '#2196F3',
-            fillColor: '#2196F3',
-            fillOpacity: 0.1,
-            weight: 1
-        }).addTo(this.map);
 
         // Center map on first location update
         if (!this.hasBeenCentered) {
@@ -134,7 +145,25 @@ class MapManager {
             if (icon) {
                 const arrowElement = icon.querySelector('.arrow-marker');
                 if (arrowElement) {
-                    arrowElement.style.transform = `rotate(${azimuth}deg)`;
+                    // Calculate shortest rotation path
+                    let targetRotation = azimuth;
+                    let currentRotation = this.lastRotation;
+                    
+                    // Calculate the difference
+                    let diff = targetRotation - currentRotation;
+                    
+                    // Normalize to -180 to 180 range
+                    while (diff > 180) diff -= 360;
+                    while (diff < -180) diff += 360;
+                    
+                    // Calculate new rotation (accumulated to avoid resets)
+                    let newRotation = currentRotation + diff;
+                    
+                    // Apply rotation
+                    arrowElement.style.transform = `rotate(${newRotation}deg)`;
+                    
+                    // Store the new rotation
+                    this.lastRotation = newRotation;
                 }
             }
         }
