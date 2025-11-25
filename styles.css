@@ -202,6 +202,11 @@ main {
     color: #1565c0;
 }
 
+#status-message.warning {
+    background-color: #fff3e0;
+    color: #ef6c00;
+}
+
 /* Leaflet marker customization */
 .leaflet-popup-content-wrapper {
     border-radius: 8px;
@@ -492,8 +497,9 @@ main {
     width: 40px;
     height: 40px;
     position: relative;
-    transition: transform 0.3s ease-out;
+    transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     transform-origin: center center;
+    will-change: transform;
 }
 
 /* Cardinal arrow pointing north (upward) */
